@@ -18,6 +18,17 @@ export const validateRequest = (schema) => (req, res, next) => {
     }
 };
 
+export const postSchema = z.object({
+    title: z.string().max(150, "Title cannot exceed 150 characters").optional().default(""),
+    content: z
+        .string()
+        .min(1, "Content is required")
+        .max(2200, "Content cannot exceed 2200 characters"),
+    image: z.string().optional(),
+    category: z.enum(["Post", "Announcement", "Event Update", "Member Spotlight"]).optional(),
+    status: z.enum(["Draft", "Published"]).optional(),
+});
+
 export const eventSchema = z.object({
     title: z.string().min(3, "Title must be at least 3 characters").max(100),
     description: z.string().min(10, "Description must be at least 10 characters"),
