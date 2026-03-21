@@ -5,17 +5,19 @@ import {
     getEvents,
     getMyClubEvents,
     updateEvent,
-    deleteEvent
+    deleteEvent,
+    getEvent
 } from "../controllers/eventController.js";
 import { validateRequest, eventSchema } from "../utils/validators.js";
 
 const router = Router();
 
-// Publicly accessible to logged in users (mostly students browsing)
-router.get("/", protect, getEvents);
-
 // Club admin routes
 router.get("/mine", protect, restrictTo("club_admin", "admin", "superAdmin"), getMyClubEvents);
+
+// Publicly accessible to logged in users (mostly students browsing)
+router.get("/", protect, getEvents);
+router.get("/:id", getEvent);
 
 router.post(
     "/",

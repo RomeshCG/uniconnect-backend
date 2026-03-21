@@ -135,3 +135,26 @@ export const deleteEvent = async (req, res, next) => {
         next(error);
     }
 };
+// @desc    Get single event
+// @route   GET /api/events/:id
+// @access  Public
+export const getEvent = async (req, res, next) => {
+    try {
+        const event = await Event.findById(req.params.id).populate({
+            path: "club",
+            select: "name description admin profileImage",
+            populate: {
+                path: "admin",
+                select: "name profileImage"
+            }
+        });
+
+        if (!event) {
+            return res.status(404).json({ message: "Event not found" });
+        }
+
+        res.status(200).json(event);
+    } catch (error) {
+        next(error);
+    }
+};
