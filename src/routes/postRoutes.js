@@ -5,17 +5,19 @@ import {
     toggleLike, 
     addComment 
 } from "../controllers/postController.js";
-import { protect } from "../middlewares/authMiddleware.js";
+import { protect, restrictTo } from "../middlewares/authMiddleware.js";
+import upload from "../middlewares/uploadMiddleware.js";
 
 const router = Router();
-
-// Publicly accessible but optionally protected for liking/commenting
-router.get("/", getPosts);
 
 // Protected routes (require login)
 router.use(protect);
 
-router.post("/", createPost);
+router
+    .route("/")
+    .get(getPosts)
+    .post(restrictTo("admin", "superAdmin"), upload.single("media"), createPost);
+
 router.post("/:postId/like", toggleLike);
 router.post("/:postId/comment", addComment);
 

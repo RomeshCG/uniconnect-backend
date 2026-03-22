@@ -20,11 +20,18 @@ export const getPosts = async (req, res) => {
 // Create a new post
 export const createPost = async (req, res) => {
     try {
-        const { content, category, media } = req.body;
+        const { content, category } = req.body;
+        let media = req.body.media || null;
+
+        // If file is uploaded via multer
+        if (req.file) {
+            media = `/public/uploads/${req.file.filename}`;
+        }
+
         const post = await Post.create({
             author: req.user._id,
             content,
-            category,
+            category: category || "General",
             media,
         });
         

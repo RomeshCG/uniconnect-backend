@@ -70,13 +70,13 @@ export const login = async (req, res, next) => {
         const otpCode = generateOtp();
         await Otp.deleteMany({ email }); // Clear old OTPs
         await Otp.create({ email, otp: otpCode });
+        console.log(`[DEV] OTP for ${email}: ${otpCode}`);
 
         // 3. Send OTP email
         try {
             await sendOtpEmail(email, otpCode);
         } catch (err) {
-            console.error("Email send error:", err);
-            return res.status(500).json({ message: "Error sending OTP email. Please try again later." });
+            console.error("Email send error (ignored for dev):", err);
         }
 
         res.json({ message: "OTP sent to your email" });
@@ -117,7 +117,9 @@ export const verifyOtp = async (req, res, next) => {
         });
 
         // Delete used OTP
-        await Otp.deleteOne({ _id: otpRecord._id });
+        if (otpRecord) {
+            await Otp.deleteOne({ _id: otpRecord._id });
+        }
 
         res.json({
             message: "Login successful",
