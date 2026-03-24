@@ -13,17 +13,36 @@ const clubSchema = new mongoose.Schema(
             trim: true,
             default: "",
         },
+        category: {
+            type: String,
+            trim: true,
+            default: "General",
+        },
         admin: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
             required: [true, "Club admin is required"],
+            unique: true,
         },
-        members: [
+        logo: {
+            type: String,
+            default: "",
+        },
+        banner: {
+            type: String,
+            default: "",
+        },
+        gallery: [
             {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: "User",
+                type: String,
             },
         ],
+        socialLinks: {
+            instagram: { type: String, default: "" },
+            twitter: { type: String, default: "" },
+            facebook: { type: String, default: "" },
+            website: { type: String, default: "" },
+        },
     },
     {
         timestamps: true,
