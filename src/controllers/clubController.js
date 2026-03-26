@@ -228,7 +228,7 @@ export const removeMember = async (req, res, next) => {
 export const updateClubSettings = async (req, res, next) => {
     try {
         const { clubId } = req.params;
-        const { name, description, logo, banner, gallery, socialLinks } = req.body;
+        const { name, description, category, logo, banner, gallery, socialLinks } = req.body;
 
         const club = await Club.findById(clubId);
         if (!club) return res.status(404).json({ message: "Club not found" });
