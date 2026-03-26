@@ -9,8 +9,7 @@ import { fileURLToPath } from "url";
 import routes from "./routes/index.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 
-import path from "path";
-import { fileURLToPath } from "url";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,8 +27,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(morgan("dev"));
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+
 
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, "../public")));
