@@ -36,7 +36,7 @@ const userSchema = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ["student", "admin", "superAdmin"],
+            enum: ["student", "club_admin", "admin", "superAdmin"],
             default: "student",
         },
         lastEmailVerification: {

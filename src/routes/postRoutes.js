@@ -1,24 +1,51 @@
 import { Router } from "express";
-import { 
-    getPosts, 
-    createPost, 
-    toggleLike, 
-    addComment 
-} from "../controllers/postController.js";
 import { protect, restrictTo } from "../middlewares/authMiddleware.js";
-import upload from "../middlewares/uploadMiddleware.js";
+import {
+    createPost,
+    getPosts,
+    getPublishedPosts,
+    updatePost,
+    deletePost,
+    getPost,
+} from "../controllers/postController.js";
+import { validateRequest, postSchema } from "../utils/validators.js";
 
 const router = Router();
 
-// Protected routes (require login)
-router.use(protect);
+// Published posts for feed (all logged in users)
+router.get("/published", protect, getPublishedPosts);
 
-router
-    .route("/")
-    .get(getPosts)
-    .post(restrictTo("admin", "superAdmin"), upload.single("media"), createPost);
+// Management routes — restricted to admins/club_admins
+router.get(
+    "/",
+    protect,
+    restrictTo("club_admin", "admin", "superAdmin"),
+    getPosts
+);
 
-router.post("/:postId/like", toggleLike);
-router.post("/:postId/comment", addComment);
+router.get("/:id", protect, getPost);
+
+router.post(
+    "/",
+    protect,
+    restrictTo("club_admin", "admin", "superAdmin"),
+    validateRequest(postSchema),
+    createPost
+);
+
+router.put(
+    "/:id",
+    protect,
+    restrictTo("club_admin", "admin", "superAdmin"),
+    validateRequest(postSchema.partial()),
+    updatePost
+);
+
+router.delete(
+    "/:id",
+    protect,
+    restrictTo("club_admin", "admin", "superAdmin"),
+    deletePost
+);
 
 export default router;

@@ -1,85 +1,175 @@
-import Post from "../models/Post.js";
-import Comment from "../models/Comment.js";
+import Post from "../models/post.js";
+import Club from "../models/club.js";
 
-// Fetch all posts with populated authors and comments
-export const getPosts = async (req, res) => {
+// @desc    Create a new post
+// @route   POST /api/posts
+// @access  Private/ClubAdmin | Admin | SuperAdmin
+export const createPost = async (req, res, next) => {
     try {
-        const posts = await Post.find()
-            .sort({ createdAt: -1 })
-            .populate("author", "name department initials profileImage")
-            .populate({
-                path: "comments",
-                populate: { path: "author", select: "name" },
-            });
-        res.status(200).json(posts);
-    } catch (error) {
-        res.status(500).json({ message: "Failed to fetch posts", error: error.message });
-    }
-};
+        const { title, content, image, category, status } = req.body;
 
-// Create a new post
-export const createPost = async (req, res) => {
-    try {
-        const { content, category } = req.body;
-        let media = req.body.media || null;
+        let authorName = "UniConnect";
+        let club = null;
 
-        // If file is uploaded via multer
-        if (req.file) {
-            media = `/public/uploads/${req.file.filename}`;
+        if (req.user.role === "club_admin") {
+            const clubDoc = await Club.findOne({ admin: req.user._id });
+            if (!clubDoc) {
+                return res.status(403).json({
+                    message: "You must be the admin of a registered club to create posts.",
+                });
+            }
+            authorName = clubDoc.name;
+            club = clubDoc._id;
+        }
+
+        // Enforce category defaults and restrictions
+        let resolvedCategory = category;
+        if (req.user.role === "club_admin") {
+            // Club admins can use Post, Event Update, Member Spotlight — not Announcement
+            const allowedForClubAdmin = ["Post", "Event Update", "Member Spotlight"];
+            if (!allowedForClubAdmin.includes(resolvedCategory)) {
+                resolvedCategory = "Post";
+            }
+        } else {
+            // Admin / superAdmin — default to Announcement if not specified
+            if (!resolvedCategory || resolvedCategory === "Post") {
+                resolvedCategory = "Announcement";
+            }
         }
 
         const post = await Post.create({
-            author: req.user._id,
+            title: title || "",
             content,
-            category: category || "General",
-            media,
+            image: image || "",
+            category: resolvedCategory,
+            status: status || "Draft",
+            authorName,
+            club,
+            createdBy: req.user._id,
         });
-        
-        const populatedPost = await post.populate("author", "name department initials profileImage");
-        res.status(201).json(populatedPost);
+
+        res.status(201).json({ message: "Post created successfully", post });
     } catch (error) {
-        res.status(500).json({ message: "Failed to create post", error: error.message });
+        next(error);
     }
 };
 
-// Handle post likes
-export const toggleLike = async (req, res) => {
+// @desc    Get all posts (for management — admins see all, club_admin sees own club)
+// @route   GET /api/posts
+// @access  Private/ClubAdmin | Admin | SuperAdmin
+export const getPosts = async (req, res, next) => {
     try {
-        const { postId } = req.params;
-        const post = await Post.findById(postId);
-        
-        if (!post) return res.status(404).json({ message: "Post not found" });
+        let query = {};
 
-        const isLiked = post.likes.includes(req.user._id);
-
-        if (isLiked) {
-            post.likes = post.likes.filter(id => id.toString() !== req.user._id.toString());
-        } else {
-            post.likes.push(req.user._id);
+        if (req.user.role === "club_admin") {
+            const club = await Club.findOne({ admin: req.user._id });
+            if (!club) return res.status(200).json([]);
+            query.club = club._id;
         }
 
-        await post.save();
-        res.status(200).json({ likes: post.likes, isLiked: !isLiked });
+        const posts = await Post.find(query)
+            .populate("club", "name")
+            .populate("createdBy", "name")
+            .sort({ createdAt: -1 });
+
+        res.status(200).json(posts);
     } catch (error) {
-        res.status(500).json({ message: "Failed to toggle like", error: error.message });
+        next(error);
     }
 };
 
-// Post a comment
-export const addComment = async (req, res) => {
+// @desc    Get published posts (for public feed)
+// @route   GET /api/posts/published
+// @access  Private
+export const getPublishedPosts = async (req, res, next) => {
     try {
-        const { postId } = req.params;
-        const { text } = req.body;
+        const posts = await Post.find({ status: "Published" })
+            .populate("club", "name")
+            .sort({ createdAt: -1 });
 
-        const comment = await Comment.create({
-            author: req.user._id,
-            post: postId,
-            text,
+        res.status(200).json(posts);
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Update a post
+// @route   PUT /api/posts/:id
+// @access  Private/Owner | Admin
+export const updatePost = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const post = await Post.findById(id);
+
+        if (!post) {
+            return res.status(404).json({ message: "Post not found" });
+        }
+
+        const isCreator = post.createdBy.toString() === req.user._id.toString();
+        const isAdmin = req.user.role === "admin" || req.user.role === "superAdmin";
+
+        if (!isCreator && !isAdmin) {
+            return res.status(403).json({ message: "Not authorized to update this post" });
+        }
+
+        const allowedUpdates = ["title", "content", "image", "category", "status"];
+        const updates = {};
+        allowedUpdates.forEach((field) => {
+            if (req.body[field] !== undefined) updates[field] = req.body[field];
         });
 
-        const populatedComment = await comment.populate("author", "name");
-        res.status(201).json(populatedComment);
+        const updatedPost = await Post.findByIdAndUpdate(id, updates, {
+            new: true,
+            runValidators: true,
+        });
+
+        res.status(200).json({ message: "Post updated successfully", post: updatedPost });
     } catch (error) {
-        res.status(500).json({ message: "Failed to add comment", error: error.message });
+        next(error);
+    }
+};
+
+// @desc    Delete a post
+// @route   DELETE /api/posts/:id
+// @access  Private/Owner | Admin
+export const deletePost = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const post = await Post.findById(id);
+
+        if (!post) {
+            return res.status(404).json({ message: "Post not found" });
+        }
+
+        const isCreator = post.createdBy.toString() === req.user._id.toString();
+        const isAdmin = req.user.role === "admin" || req.user.role === "superAdmin";
+
+        if (!isCreator && !isAdmin) {
+            return res.status(403).json({ message: "Not authorized to delete this post" });
+        }
+
+        await post.deleteOne();
+        res.status(200).json({ message: "Post deleted successfully" });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Get single post
+// @route   GET /api/posts/:id
+// @access  Private
+export const getPost = async (req, res, next) => {
+    try {
+        const post = await Post.findById(req.params.id)
+            .populate("club", "name description")
+            .populate("createdBy", "name profileImage");
+
+        if (!post) {
+            return res.status(404).json({ message: "Post not found" });
+        }
+
+        res.status(200).json(post);
+    } catch (error) {
+        next(error);
     }
 };
