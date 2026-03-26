@@ -43,6 +43,10 @@ const clubSchema = new mongoose.Schema(
             facebook: { type: String, default: "" },
             website: { type: String, default: "" },
         },
+        isBanned: {
+            type: Boolean,
+            default: false,
+        },
     },
     {
         timestamps: true,

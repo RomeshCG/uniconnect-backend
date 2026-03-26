@@ -8,7 +8,9 @@ import {
     addMember,
     updateMemberRole,
     removeMember,
-    updateClubSettings
+    updateClubSettings,
+    deleteClub,
+    toggleClubBan
 } from "../controllers/clubController.js";
 
 const router = Router();
@@ -29,6 +31,10 @@ router.post("/", protect, restrictTo("admin", "superAdmin"), createClub);
 
 // Club settings update
 router.put("/:clubId/settings", protect, restrictTo("club_admin", "admin", "superAdmin"), updateClubSettings);
+
+// Admin and SuperAdmin actions
+router.delete("/:clubId", protect, restrictTo("admin", "superAdmin"), deleteClub);
+router.patch("/:clubId/ban", protect, restrictTo("admin", "superAdmin"), toggleClubBan);
 
 // Member management
 router.post("/:clubId/members", protect, restrictTo("club_admin", "admin", "superAdmin"), addMember);

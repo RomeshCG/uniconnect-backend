@@ -1,6 +1,8 @@
 import Club from "../models/club.js";
 import User from "../models/user.js";
 import ClubMember from "../models/clubMember.js";
+import Event from "../models/event.js";
+import Post from "../models/post.js";
 
 // @desc    Create a new club
 // @route   POST /api/clubs
@@ -253,6 +255,56 @@ export const updateClubSettings = async (req, res, next) => {
         await club.save();
 
         res.status(200).json({ message: "Club settings updated successfully", club });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Delete a club
+// @route   DELETE /api/clubs/:clubId
+// @access  Private/Admin/SuperAdmin
+export const deleteClub = async (req, res, next) => {
+    try {
+        const { clubId } = req.params;
+
+        const club = await Club.findById(clubId);
+        if (!club) return res.status(404).json({ message: "Club not found" });
+
+        // Delete the club
+        await Club.findByIdAndDelete(clubId);
+
+        // Delete all club members associated with this club
+        await ClubMember.deleteMany({ club: clubId });
+
+        // Delete all events associated with this club
+        await Event.deleteMany({ club: clubId });
+
+        // Delete all posts associated with this club
+        await Post.deleteMany({ club: clubId });
+
+        res.status(200).json({ message: "Club deleted successfully" });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Ban or Unban a club
+// @route   PATCH /api/clubs/:clubId/ban
+// @access  Private/Admin/SuperAdmin
+export const toggleClubBan = async (req, res, next) => {
+    try {
+        const { clubId } = req.params;
+
+        const club = await Club.findById(clubId);
+        if (!club) return res.status(404).json({ message: "Club not found" });
+
+        club.isBanned = !club.isBanned;
+        await club.save();
+
+        res.status(200).json({
+            message: `Club ${club.isBanned ? "banned" : "unbanned"} successfully`,
+            isBanned: club.isBanned,
+        });
     } catch (error) {
         next(error);
     }
