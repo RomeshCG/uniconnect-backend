@@ -21,6 +21,10 @@ const clubMemberSchema = new mongoose.Schema(
             type: Date,
             default: Date.now,
         },
+        isBanned: {
+            type: Boolean,
+            default: false,
+        },
     },
     {
         timestamps: true,

@@ -14,7 +14,7 @@ import { validateRequest, eventSchema } from "../utils/validators.js";
 const router = Router();
 
 // Club admin routes
-router.get("/mine", protect, restrictTo("club_admin", "admin", "superAdmin"), getMyClubEvents);
+router.get("/mine", protect, restrictTo("club_admin", "event_host", "admin", "superAdmin"), getMyClubEvents);
 router.get("/manageable", protect, getManageableEvents);
 
 // Publicly accessible to logged in users (mostly students browsing)
@@ -24,7 +24,7 @@ router.get("/:id", protect, getEvent);
 router.post(
     "/",
     protect,
-    restrictTo("club_admin", "admin", "superAdmin"),
+    restrictTo("club_admin", "event_host", "admin", "superAdmin"),
     validateRequest(eventSchema),
     createEvent
 );
@@ -32,7 +32,7 @@ router.post(
 router.put(
     "/:id",
     protect,
-    restrictTo("club_admin", "admin", "superAdmin"),
+    restrictTo("club_admin", "event_host", "admin", "superAdmin"),
     validateRequest(eventSchema.partial()),
     updateEvent
 );
@@ -40,7 +40,7 @@ router.put(
 router.delete(
     "/:id",
     protect,
-    restrictTo("club_admin", "admin", "superAdmin"),
+    restrictTo("club_admin", "event_host", "admin", "superAdmin"),
     deleteEvent
 );
 

@@ -10,7 +10,8 @@ import {
     removeMember,
     updateClubSettings,
     deleteClub,
-    toggleClubBan
+    toggleClubBan,
+    toggleMemberBan
 } from "../controllers/clubController.js";
 
 const router = Router();
@@ -19,7 +20,7 @@ const router = Router();
 router.get("/", protect, getClubs);
 
 // Club Admin only route for their own managed clubs
-router.get("/mine", protect, restrictTo("club_admin", "admin", "superAdmin"), getMyClubs);
+router.get("/mine", protect, restrictTo("club_admin", "event_host", "admin", "superAdmin"), getMyClubs);
 
 router.get("/:clubId", protect, getClubs); // Use the same controller or create a new one
 
@@ -39,6 +40,7 @@ router.patch("/:clubId/ban", protect, restrictTo("admin", "superAdmin"), toggleC
 // Member management
 router.post("/:clubId/members", protect, restrictTo("club_admin", "admin", "superAdmin"), addMember);
 router.patch("/:clubId/members/:userId/role", protect, restrictTo("club_admin", "admin", "superAdmin"), updateMemberRole);
+router.patch("/:clubId/members/:userId/ban", protect, restrictTo("club_admin", "admin", "superAdmin"), toggleMemberBan);
 router.delete("/:clubId/members/:userId", protect, restrictTo("club_admin", "admin", "superAdmin"), removeMember);
 
 export default router;

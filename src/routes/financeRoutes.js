@@ -15,7 +15,7 @@ const router = Router();
 
 // All finance routes require being logged in and having at least club_admin role
 // Further checks are done in the controller to ensure they own the specific event
-router.use(protect, restrictTo("club_admin", "admin", "superAdmin"));
+router.use(protect, restrictTo("club_admin", "event_host", "admin", "superAdmin"));
 
 router.get("/:eventId/summary", getEventFinanceSummary);
 router.get("/:eventId/sponsors", getSponsors);

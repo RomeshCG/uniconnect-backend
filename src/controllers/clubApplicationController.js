@@ -14,6 +14,12 @@ export const applyToClub = async (req, res) => {
             return res.status(404).json({ message: "User not found" });
         }
 
+        // Check if user is banned from this club
+        const membership = await ClubMember.findOne({ club: clubId, user: userId });
+        if (membership && membership.isBanned) {
+            return res.status(403).json({ message: "You have been banned from this club and cannot apply." });
+        }
+
         // Check if there is already a pending or approved application
         const existingApplication = await ClubApplication.findOne({
             user: userId,
