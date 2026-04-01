@@ -74,7 +74,18 @@ export const getClubs = async (req, res, next) => {
         if (clubId) {
             const club = await Club.findById(clubId).populate("admin", "name email profileImage");
             if (!club) return res.status(404).json({ message: "Club not found" });
-            return res.status(200).json(club);
+
+            // Check if requesting user is a member
+            let isMember = false;
+            if (req.user) {
+                const membership = await ClubMember.findOne({ club: clubId, user: req.user._id });
+                isMember = !!membership;
+            }
+
+            return res.status(200).json({
+                ...club._doc,
+                isMember
+            });
         }
         const clubs = await Club.find().populate("admin", "name email profileImage");
         res.status(200).json(clubs);

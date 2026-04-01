@@ -48,6 +48,8 @@ export const signup = async (req, res, next) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                studentId: user.studentId,
+                department: user.department,
             },
         });
     } catch (error) {
@@ -133,6 +135,8 @@ export const verifyOtp = async (req, res, next) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                studentId: user.studentId,
+                department: user.department,
             },
         });
     } catch (error) {
