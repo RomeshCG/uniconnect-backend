@@ -66,6 +66,10 @@ export const login = async (req, res, next) => {
             return res.status(401).json({ message: "Invalid email or password" });
         }
 
+        if (user.isBanned) {
+            return res.status(403).json({ message: "Your account has been suspended. Please contact administration." });
+        }
+
         // 2. Generate and save OTP
         const otpCode = generateOtp();
         await Otp.deleteMany({ email }); // Clear old OTPs
