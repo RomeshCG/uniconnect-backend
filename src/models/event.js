@@ -59,6 +59,14 @@ const eventSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+        budget: {
+            type: Number,
+            default: 0,
+        },
+        ticketPrice: {
+            type: Number,
+            default: 0,
+        },
     },
     {
         timestamps: true,
