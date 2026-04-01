@@ -1,75 +1,74 @@
 import Post from "../models/post.js";
 import Club from "../models/club.js";
+import { emitNewPost } from "../config/socket.js";
 
 // @desc    Create a new post
 // @route   POST /api/posts
 // @access  Private/ClubAdmin | Admin | SuperAdmin
 export const createPost = async (req, res, next) => {
     try {
-        const { title, content, image, category, status } = req.body;
+        const { content, media, category } = req.body;
 
-        let authorName = "UniConnect";
-        let club = null;
+        let clubId = null;
+        let isSystemPost = false;
 
-        if (req.user.role === "club_admin") {
-            const clubDoc = await Club.findOne({ admin: req.user._id });
-            if (!clubDoc) {
-                return res.status(403).json({
-                    message: "You must be the admin of a registered club to create posts.",
-                });
-            }
-            authorName = clubDoc.name;
-            club = clubDoc._id;
-        }
-
-        // Enforce category defaults and restrictions
-        let resolvedCategory = category;
-        if (req.user.role === "club_admin") {
-            // Club admins can use Post, Event Update, Member Spotlight — not Announcement
-            const allowedForClubAdmin = ["Post", "Event Update", "Member Spotlight"];
-            if (!allowedForClubAdmin.includes(resolvedCategory)) {
-                resolvedCategory = "Post";
-            }
-        } else {
-            // Admin / superAdmin — default to Announcement if not specified
-            if (!resolvedCategory || resolvedCategory === "Post") {
-                resolvedCategory = "Announcement";
+        // Determine Branding Identity
+        if (req.user.role === "superAdmin" || req.user.role === "admin") {
+            isSystemPost = true;
+        } else if (req.user.role === "club_admin") {
+            const club = await Club.findOne({ admin: req.user._id });
+            if (club) {
+                clubId = club._id;
+            } else {
+                isSystemPost = true;
             }
         }
 
         const post = await Post.create({
-            title: title || "",
+            author: req.user._id,
             content,
-            image: image || "",
-            category: resolvedCategory,
-            status: status || "Draft",
-            authorName,
-            club,
-            createdBy: req.user._id,
+            media: media || "",
+            category: category || "General",
+            club: clubId,
+            isSystemPost: isSystemPost,
         });
 
-        res.status(201).json({ message: "Post created successfully", post });
+        const populatedPost = await Post.findById(post._id)
+            .populate("author", "name profileImage")
+            .populate("club", "name logo");
+
+        emitNewPost(populatedPost);
+
+        res.status(201).json({ message: "Post created successfully", post: populatedPost });
     } catch (error) {
         next(error);
     }
 };
 
-// @desc    Get all posts (for management — admins see all, club_admin sees own club)
+// @desc    Get all posts (for management)
 // @route   GET /api/posts
-// @access  Private/ClubAdmin | Admin | SuperAdmin
+// @access  Private
+// FIX: Segregate posts based on role
 export const getPosts = async (req, res, next) => {
     try {
         let query = {};
 
+        // RBAC: Segregation Logic
         if (req.user.role === "club_admin") {
             const club = await Club.findOne({ admin: req.user._id });
-            if (!club) return res.status(200).json([]);
-            query.club = club._id;
+            if (club) {
+                query = { club: club._id };
+            } else {
+                return res.status(200).json([]); // No club, no posts
+            }
+        } else if (req.user.role === "superAdmin" || req.user.role === "admin") {
+            // User specifically asked superAdmin to see posts "posted by using that role"
+            query = { isSystemPost: true };
         }
 
         const posts = await Post.find(query)
-            .populate("club", "name")
-            .populate("createdBy", "name")
+            .populate("author", "name")
+            .populate("club", "name logo")
             .sort({ createdAt: -1 });
 
         res.status(200).json(posts);
@@ -83,8 +82,10 @@ export const getPosts = async (req, res, next) => {
 // @access  Private
 export const getPublishedPosts = async (req, res, next) => {
     try {
-        const posts = await Post.find({ status: "Published" })
-            .populate("club", "name")
+        // Feed always shows all published posts
+        const posts = await Post.find()
+            .populate("author", "name")
+            .populate("club", "name logo")
             .sort({ createdAt: -1 });
 
         res.status(200).json(posts);
@@ -105,14 +106,20 @@ export const updatePost = async (req, res, next) => {
             return res.status(404).json({ message: "Post not found" });
         }
 
-        const isCreator = post.createdBy.toString() === req.user._id.toString();
+        // Authorization Logic
         const isAdmin = req.user.role === "admin" || req.user.role === "superAdmin";
+        let isAuthorized = isAdmin;
 
-        if (!isCreator && !isAdmin) {
+        if (req.user.role === "club_admin") {
+            const club = await Club.findOne({ admin: req.user._id });
+            isAuthorized = club && post.club && post.club.toString() === club._id.toString();
+        }
+
+        if (!isAuthorized) {
             return res.status(403).json({ message: "Not authorized to update this post" });
         }
 
-        const allowedUpdates = ["title", "content", "image", "category", "status"];
+        const allowedUpdates = ["content", "media", "category"];
         const updates = {};
         allowedUpdates.forEach((field) => {
             if (req.body[field] !== undefined) updates[field] = req.body[field];
@@ -121,7 +128,9 @@ export const updatePost = async (req, res, next) => {
         const updatedPost = await Post.findByIdAndUpdate(id, updates, {
             new: true,
             runValidators: true,
-        });
+        })
+        .populate("author", "name")
+        .populate("club", "name logo");
 
         res.status(200).json({ message: "Post updated successfully", post: updatedPost });
     } catch (error) {
@@ -141,10 +150,16 @@ export const deletePost = async (req, res, next) => {
             return res.status(404).json({ message: "Post not found" });
         }
 
-        const isCreator = post.createdBy.toString() === req.user._id.toString();
+        // Authorization Logic
         const isAdmin = req.user.role === "admin" || req.user.role === "superAdmin";
+        let isAuthorized = isAdmin;
 
-        if (!isCreator && !isAdmin) {
+        if (req.user.role === "club_admin") {
+            const club = await Club.findOne({ admin: req.user._id });
+            isAuthorized = club && post.club && post.club.toString() === club._id.toString();
+        }
+
+        if (!isAuthorized) {
             return res.status(403).json({ message: "Not authorized to delete this post" });
         }
 
@@ -161,8 +176,8 @@ export const deletePost = async (req, res, next) => {
 export const getPost = async (req, res, next) => {
     try {
         const post = await Post.findById(req.params.id)
-            .populate("club", "name description")
-            .populate("createdBy", "name profileImage");
+            .populate("author", "name profileImage")
+            .populate("club", "name logo");
 
         if (!post) {
             return res.status(404).json({ message: "Post not found" });

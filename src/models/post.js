@@ -14,8 +14,8 @@ const postSchema = new mongoose.Schema(
         },
         category: {
             type: String,
-            enum: ["Announcement", "Event", "Resource", "General"],
-            default: "General",
+            enum: ["Announcement", "Post", "Event Update", "Member Spotlight", "General", "Event", "Resource"],
+            default: "Post",
         },
         media: {
             type: String,
@@ -27,6 +27,15 @@ const postSchema = new mongoose.Schema(
                 ref: "User",
             },
         ],
+        club: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Club",
+            default: null,
+        },
+        isSystemPost: {
+            type: Boolean,
+            default: false,
+        },
     },
     {
         timestamps: true,
