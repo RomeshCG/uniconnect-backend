@@ -1,12 +1,13 @@
 import Event from "../models/event.js";
 import Club from "../models/club.js";
+import ClubMember from "../models/clubMember.js";
 
 // @desc    Create a new event
 // @route   POST /api/events
 // @access  Private/ClubAdmin (or higher)
 export const createEvent = async (req, res, next) => {
     try {
-        const { title, description, banner, dateTime, venue, capacity, ticketType, status } = req.body;
+        const { title, description, banner, dateTime, venue, capacity, ticketType, status, location } = req.body;
 
         // Find the club owned by this user (or if admin, they might need to specify a club, but for now we assume club_admin logic)
         const club = await Club.findOne({ admin: req.user._id });
@@ -28,6 +29,7 @@ export const createEvent = async (req, res, next) => {
             venue,
             capacity,
             ticketType,
+            location: location || { lat: 6.9271, lng: 79.8612 },
             status: status || "Draft",
             club: club._id,
             createdBy: req.user._id
@@ -142,7 +144,7 @@ export const getEvent = async (req, res, next) => {
     try {
         const event = await Event.findById(req.params.id).populate({
             path: "club",
-            select: "name description admin profileImage",
+            select: "name description admin logo banner",
             populate: {
                 path: "admin",
                 select: "name profileImage"
@@ -153,7 +155,25 @@ export const getEvent = async (req, res, next) => {
             return res.status(404).json({ message: "Event not found" });
         }
 
-        res.status(200).json(event);
+        // Check membership if user is logged in
+        let isMember = false;
+        if (req.user) {
+            // Check if user is the admin of the club
+            const isAdmin = event.club.admin._id.toString() === req.user._id.toString();
+            
+            // Check if user is a member
+            const memberRecord = await ClubMember.findOne({ 
+                club: event.club._id, 
+                user: req.user._id 
+            });
+            
+            isMember = isAdmin || !!memberRecord;
+        }
+
+        res.status(200).json({
+            ...event.toObject(),
+            isMember
+        });
     } catch (error) {
         next(error);
     }

@@ -5,6 +5,9 @@ import clubRoutes from "./clubRoutes.js";
 import eventRoutes from "./eventRoutes.js";
 import uploadRoutes from "./uploadRoutes.js";
 import postRoutes from "./postRoutes.js";
+import registrationRoutes from "./registrationRoutes.js";
+import savedItemRoutes from "./savedItemRoutes.js";
+import financeRoutes from "./financeRoutes.js";
 
 const router = Router();
 
@@ -18,6 +21,9 @@ router.use("/clubs", clubRoutes);
 router.use("/events", eventRoutes);
 router.use("/upload", uploadRoutes);
 router.use("/posts", postRoutes);
+router.use("/registrations", registrationRoutes);
+router.use("/saved-items", savedItemRoutes);
+router.use("/finance", financeRoutes);
 
 export default router;
 
