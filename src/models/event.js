@@ -25,6 +25,10 @@ const eventSchema = new mongoose.Schema(
             required: [true, "Event venue is required"],
             trim: true,
         },
+        location: {
+            lat: { type: Number, default: 6.9271 }, // Default to Colombo/Univ
+            lng: { type: Number, default: 79.8612 },
+        },
         capacity: {
             type: Number,
             required: [true, "Capacity limit is required"],
