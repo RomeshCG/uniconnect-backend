@@ -80,6 +80,41 @@ export const getMyClubEvents = async (req, res, next) => {
     }
 };
 
+// @desc    Get all events the user is authorized to manage (Admin or Host)
+// @route   GET /api/events/manageable
+// @access  Private
+export const getManageableEvents = async (req, res, next) => {
+    try {
+        const userId = req.user._id;
+
+        // 1. Find clubs where user is the primary Admin
+        const ownedClubs = await Club.find({ admin: userId }).select("_id");
+        const ownedClubIds = ownedClubs.map(c => c._id);
+
+        // 2. Find clubs where user is an Event Host
+        const hostedMemberships = await ClubMember.find({ 
+            user: userId, 
+            role: "event_host" 
+        }).select("club");
+        const hostedClubIds = hostedMemberships.map(m => m.club);
+
+        // 3. Combine unique club IDs
+        const allManageableClubIds = [...new Set([...ownedClubIds, ...hostedClubIds])];
+
+        // 4. Fetch events for these clubs
+        const events = await Event.find({ 
+            club: { $in: allManageableClubIds },
+            status: { $ne: "Cancelled" } 
+        })
+        .populate("club", "name logo")
+        .sort({ dateTime: -1 });
+
+        res.status(200).json(events);
+    } catch (error) {
+        next(error);
+    }
+};
+
 // @desc    Update an event
 // @route   PUT /api/events/:id
 // @access  Private/Owner/Admin

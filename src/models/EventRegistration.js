@@ -35,6 +35,15 @@ const eventRegistrationSchema = new mongoose.Schema(
             type: Date,
             default: Date.now,
         },
+        checkedInAt: {
+            type: Date,
+            default: null,
+        },
+        checkedInBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
     },
     {
         timestamps: true,

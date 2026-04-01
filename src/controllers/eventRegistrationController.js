@@ -172,3 +172,70 @@ export const getRegistrationDetails = async (req, res, next) => {
         next(error);
     }
 };
+
+/**
+ * @desc    Mark attendance (Check-in) via QR or manual ID
+ * @route   PATCH /api/registrations/mark-attendance
+ * @access  Private (Club Admin/Event Host Only)
+ */
+export const markAttendance = async (req, res, next) => {
+    try {
+        const { ticketId, eventId } = req.body;
+        const auditorId = req.user._id;
+
+        if (!ticketId || !eventId) {
+            return res.status(400).json({ message: "Ticket ID and Event ID are required" });
+        }
+
+        // 1. Fetch the event and populate club details for auth check
+        const event = await Event.findById(eventId).populate("club");
+        if (!event) {
+            return res.status(404).json({ message: "Event not found" });
+        }
+
+        // 2. Authorization Check (Strictly Club Admin or Event Host)
+        // Check if user is the Club Admin of the organizing club
+        const isClubAdmin = event.club.admin.toString() === auditorId.toString();
+        
+        // Check if user is an Event Host in the organizing club
+        const membership = await ClubMember.findOne({ club: event.club._id, user: auditorId });
+        const isEventHost = membership && membership.role === "event_host";
+
+        if (!isClubAdmin && !isEventHost) {
+            return res.status(403).json({ message: "Not authorized to mark attendance for this event" });
+        }
+
+        // 3. Find the registration
+        const registration = await EventRegistration.findOne({ ticketId, event: eventId }).populate("user", "name department studentId");
+        
+        if (!registration) {
+            return res.status(404).json({ message: "Invalid ticket for this event" });
+        }
+
+        // 4. Check if already checked-in
+        if (registration.status === "Checked-in") {
+            return res.status(400).json({ 
+                message: "This ticket has already been used for entry",
+                student: registration.user 
+            });
+        }
+
+        // 5. Update Registration
+        registration.status = "Checked-in";
+        registration.checkedInAt = Date.now();
+        registration.checkedInBy = auditorId;
+        await registration.save();
+
+        res.status(200).json({
+            message: "Attendance marked successfully!",
+            student: {
+                name: registration.user.name,
+                department: registration.user.department || registration.registrationData?.department,
+                studentId: registration.user.studentId
+            }
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};
