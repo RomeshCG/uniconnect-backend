@@ -1,5 +1,6 @@
 import Event from "../models/event.js";
 import Club from "../models/club.js";
+import ClubMember from "../models/clubMember.js";
 
 // @desc    Create a new event
 // @route   POST /api/events
@@ -153,7 +154,25 @@ export const getEvent = async (req, res, next) => {
             return res.status(404).json({ message: "Event not found" });
         }
 
-        res.status(200).json(event);
+        // Check membership if user is logged in
+        let isMember = false;
+        if (req.user) {
+            // Check if user is the admin of the club
+            const isAdmin = event.club.admin._id.toString() === req.user._id.toString();
+            
+            // Check if user is a member
+            const memberRecord = await ClubMember.findOne({ 
+                club: event.club._id, 
+                user: req.user._id 
+            });
+            
+            isMember = isAdmin || !!memberRecord;
+        }
+
+        res.status(200).json({
+            ...event.toObject(),
+            isMember
+        });
     } catch (error) {
         next(error);
     }

@@ -17,7 +17,7 @@ router.get("/mine", protect, restrictTo("club_admin", "admin", "superAdmin"), ge
 
 // Publicly accessible to logged in users (mostly students browsing)
 router.get("/", protect, getEvents);
-router.get("/:id", getEvent);
+router.get("/:id", protect, getEvent);
 
 router.post(
     "/",
