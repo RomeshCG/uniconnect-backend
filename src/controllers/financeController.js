@@ -2,22 +2,27 @@ import Event from "../models/event.js";
 import Sponsorship from "../models/Sponsorship.js";
 import Expense from "../models/Expense.js";
 import Club from "../models/club.js";
+import ClubMember from "../models/clubMember.js";
 
 // Helper to check if user has access to event finance
 const checkFinanceAccess = async (user, eventId) => {
     if (user.role === "admin" || user.role === "superAdmin") return true;
     
-    if (user.role === "club_admin") {
-        const event = await Event.findById(eventId);
-        if (!event) return false;
-        
-        const club = await Club.findOne({ admin: user._id });
-        if (!club) return false;
-        
-        return event.club.toString() === club._id.toString();
-    }
+    const event = await Event.findById(eventId);
+    if (!event) return false;
+
+    // Check if user is the primary Club Admin (owner)
+    const club = await Club.findById(event.club);
+    if (club && club.admin.toString() === user._id.toString()) return true;
     
-    return false;
+    // Check if user is an event_host or club_admin member
+    const membership = await ClubMember.findOne({ 
+        club: event.club, 
+        user: user._id, 
+        role: { $in: ["club_admin", "event_host"] } 
+    });
+    
+    return !!membership;
 };
 
 // @desc    Get financial summary for an event

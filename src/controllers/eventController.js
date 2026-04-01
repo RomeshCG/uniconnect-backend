@@ -9,16 +9,26 @@ export const createEvent = async (req, res, next) => {
     try {
         const { title, description, banner, dateTime, venue, capacity, ticketType, status, location } = req.body;
 
-        // Find the club owned by this user (or if admin, they might need to specify a club, but for now we assume club_admin logic)
-        const club = await Club.findOne({ admin: req.user._id });
-        if (!club && req.user.role === "club_admin") {
-            return res.status(403).json({ message: "You must be a club admin for a registered club to create events." });
+        // Find the club management status
+        let club = await Club.findOne({ admin: req.user._id });
+        
+        // If not the owner, check if the user is an event_host or club_admin member
+        if (!club) {
+            const membership = await ClubMember.findOne({ 
+                user: req.user._id, 
+                role: { $in: ["event_host", "club_admin"] } 
+            });
+            if (membership) {
+                club = await Club.findById(membership.club);
+            }
         }
 
-        // Default to a system club or allow admins to pick? 
-        // For now, let's keep it simple: must have a club.
+        if (!club && ["club_admin", "event_host"].includes(req.user.role)) {
+            return res.status(403).json({ message: "You must be a manager for a registered club to create events." });
+        }
+
         if (!club && (req.user.role === "admin" || req.user.role === "superAdmin")) {
-            return res.status(400).json({ message: "Admins must specify a clubId (Implementation pending for direct admin creation without club context)" });
+            return res.status(400).json({ message: "Admins must specify a clubId" });
         }
 
         const event = await Event.create({
@@ -68,12 +78,28 @@ export const getEvents = async (req, res, next) => {
 // @access  Private/ClubAdmin
 export const getMyClubEvents = async (req, res, next) => {
     try {
-        const club = await Club.findOne({ admin: req.user._id });
-        if (!club) {
+        // 1. Find clubs where user is the primary Admin
+        const ownedClubs = await Club.find({ admin: req.user._id }).select("_id");
+        const ownedClubIds = ownedClubs.map(c => c._id);
+
+        // 2. Find clubs where user is an Event Host or Club Admin member
+        const managementMemberships = await ClubMember.find({ 
+            user: req.user._id, 
+            role: { $in: ["event_host", "club_admin"] } 
+        }).select("club");
+        const hostedClubIds = managementMemberships.map(m => m.club);
+
+        // 3. Combine unique club IDs
+        const allManageableClubIds = [...new Set([...ownedClubIds, ...hostedClubIds])];
+
+        if (allManageableClubIds.length === 0) {
             return res.status(200).json([]);
         }
 
-        const events = await Event.find({ club: club._id }).sort({ createdAt: -1 });
+        const events = await Event.find({ club: { $in: allManageableClubIds } })
+            .populate("club", "name logo")
+            .sort({ createdAt: -1 });
+            
         res.status(200).json(events);
     } catch (error) {
         next(error);
@@ -128,10 +154,21 @@ export const updateEvent = async (req, res, next) => {
         }
 
         // Authorization check: Only creator or high-level admins
+        // Authorization check: Only creator, high-level admins, OR club managers
         const isCreator = event.createdBy.toString() === req.user._id.toString();
         const isAdmin = req.user.role === "admin" || req.user.role === "superAdmin";
-
+        
+        let isManager = false;
         if (!isCreator && !isAdmin) {
+            const membership = await ClubMember.findOne({ 
+                club: event.club, 
+                user: req.user._id, 
+                role: { $in: ["event_host", "club_admin"] } 
+            });
+            isManager = !!membership;
+        }
+
+        if (!isCreator && !isAdmin && !isManager) {
             return res.status(403).json({ message: "Not authorized to update this event" });
         }
 
@@ -159,10 +196,21 @@ export const deleteEvent = async (req, res, next) => {
         }
 
         // Authorization check
+        // Authorization check
         const isCreator = event.createdBy.toString() === req.user._id.toString();
         const isAdmin = req.user.role === "admin" || req.user.role === "superAdmin";
-
+        
+        let isManager = false;
         if (!isCreator && !isAdmin) {
+            const membership = await ClubMember.findOne({ 
+                club: event.club, 
+                user: req.user._id, 
+                role: { $in: ["event_host", "club_admin"] } 
+            });
+            isManager = !!membership;
+        }
+
+        if (!isCreator && !isAdmin && !isManager) {
             return res.status(403).json({ message: "Not authorized to delete this event" });
         }
 

@@ -74,10 +74,38 @@ export const getClubs = async (req, res, next) => {
         if (clubId) {
             const club = await Club.findById(clubId).populate("admin", "name email profileImage");
             if (!club) return res.status(404).json({ message: "Club not found" });
-            return res.status(200).json(club);
+
+            // Fetch real statistics
+            const [memberCount, eventCount] = await Promise.all([
+                ClubMember.countDocuments({ club: clubId }),
+                Event.countDocuments({ club: clubId, status: "Published" })
+            ]);
+
+            // Check if requesting user is a member
+            let isMember = false;
+            if (req.user) {
+                const membership = await ClubMember.findOne({ club: clubId, user: req.user._id });
+                isMember = !!membership;
+            }
+
+            return res.status(200).json({
+                ...club._doc,
+                isMember,
+                memberCount,
+                eventCount
+            });
         }
         const clubs = await Club.find().populate("admin", "name email profileImage");
-        res.status(200).json(clubs);
+        
+        const clubsWithStats = await Promise.all(clubs.map(async (club) => {
+            const memberCount = await ClubMember.countDocuments({ club: club._id });
+            return {
+                ...club._doc,
+                memberCount
+            };
+        }));
+
+        res.status(200).json(clubsWithStats);
     } catch (error) {
         next(error);
     }
@@ -88,8 +116,22 @@ export const getClubs = async (req, res, next) => {
 // @access  Private/ClubAdmin
 export const getMyClubs = async (req, res, next) => {
     try {
-        const clubs = await Club.find({ admin: req.user._id });
-        res.status(200).json(clubs);
+        // Find clubs where user is owner
+        const ownedClubs = await Club.find({ admin: req.user._id });
+
+        // Find clubs where user is a manager (event_host or club_admin) via ClubMember
+        const managementMemberships = await ClubMember.find({
+            user: req.user._id,
+            role: { $in: ["event_host", "club_admin"] }
+        }).populate("club");
+
+        const managementClubs = managementMemberships
+            .map(m => m.club)
+            .filter(c => c && c.admin.toString() !== req.user._id.toString()); // Only clubs they DON'T own
+
+        // Combine and deduplicate
+        const allManagedClubs = [...ownedClubs, ...managementClubs];
+        res.status(200).json(allManagedClubs);
     } catch (error) {
         next(error);
     }
@@ -167,7 +209,7 @@ export const updateMemberRole = async (req, res, next) => {
         const { clubId, userId } = req.params;
         const { role } = req.body;
 
-        if (!role || !["club_member", "event_host"].includes(role)) {
+        if (!role || !["club_member", "event_host", "club_admin"].includes(role)) {
             return res.status(400).json({ message: "Invalid role" });
         }
 
@@ -187,8 +229,30 @@ export const updateMemberRole = async (req, res, next) => {
 
         if (!member) return res.status(404).json({ message: "Member record not found" });
 
+        // Update the global User role as well
+        const user = await User.findById(userId);
+        if (user) {
+            // Only upgrade to event_host if they are a student
+            if (role === "event_host" && user.role === "student") {
+                user.role = "event_host";
+                await user.save();
+            } else if (role === "club_member" && user.role === "event_host") {
+                // If downgrading to member, check if they are host of any other club
+                const otherHostRole = await ClubMember.findOne({
+                    user: userId,
+                    role: "event_host",
+                    club: { $ne: clubId }
+                });
+                if (!otherHostRole) {
+                    user.role = "student";
+                    await user.save();
+                }
+            }
+        }
+
         res.status(200).json({ message: "Role updated successfully", member });
     } catch (error) {
+        console.error("Error in updateMemberRole:", error);
         next(error);
     }
 };
@@ -217,6 +281,41 @@ export const removeMember = async (req, res, next) => {
         if (!result) return res.status(404).json({ message: "Member record not found" });
 
         res.status(200).json({ message: "Member removed successfully" });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Toggle a member ban status
+// @route   PATCH /api/clubs/:clubId/members/:userId/ban
+// @access  Private/ClubAdmin (or higher)
+export const toggleMemberBan = async (req, res, next) => {
+    try {
+        const { clubId, userId } = req.params;
+
+        const club = await Club.findById(clubId);
+        if (!club) return res.status(404).json({ message: "Club not found" });
+
+        // Auth check
+        if (club.admin.toString() !== req.user._id.toString() && req.user.role !== "admin" && req.user.role !== "superAdmin") {
+            return res.status(403).json({ message: "Not authorized" });
+        }
+
+        // Ensure we don't ban the admin
+        if (club.admin.toString() === userId) {
+            return res.status(400).json({ message: "You cannot ban the club admin" });
+        }
+
+        const member = await ClubMember.findOne({ club: clubId, user: userId });
+        if (!member) return res.status(404).json({ message: "Member record not found" });
+
+        member.isBanned = !member.isBanned;
+        await member.save();
+
+        res.status(200).json({
+            message: `Member ${member.isBanned ? "banned" : "unbanned"} successfully`,
+            isBanned: member.isBanned
+        });
     } catch (error) {
         next(error);
     }
