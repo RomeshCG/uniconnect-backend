@@ -2,61 +2,45 @@ import mongoose from "mongoose";
 
 const postSchema = new mongoose.Schema(
     {
-        title: {
-            type: String,
-            trim: true,
-            default: "",
+        author: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
         },
         content: {
             type: String,
-            required: [true, "Post content (caption) is required"],
+            required: true,
             trim: true,
-            maxlength: [2200, "Content cannot exceed 2200 characters"],
-        },
-        image: {
-            type: String, // URL
-            default: "",
         },
         category: {
             type: String,
-            required: [true, "Post category is required"],
-            enum: ["Post", "Announcement", "Event Update", "Member Spotlight"],
-            default: "Post",
+            enum: ["Announcement", "Event", "Resource", "General"],
+            default: "General",
         },
-        status: {
+        media: {
             type: String,
-            enum: ["Draft", "Published"],
-            default: "Draft",
+            default: "",
         },
-        // The display name for the author (club name or "UniConnect" for admins)
-        authorName: {
-            type: String,
-            required: [true, "Author name is required"],
-            trim: true,
-        },
-        club: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Club",
-            default: null,
-        },
-        createdBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            required: [true, "Post must have a creator"],
-        },
-        likes: {
-            type: Number,
-            default: 0,
-        },
-        comments: {
-            type: Number,
-            default: 0,
-        },
+        likes: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User",
+            },
+        ],
     },
     {
         timestamps: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true },
     }
 );
+
+// Virtual for comments
+postSchema.virtual("comments", {
+    ref: "Comment",
+    localField: "_id",
+    foreignField: "post",
+});
 
 const Post = mongoose.model("Post", postSchema);
 
