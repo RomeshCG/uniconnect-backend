@@ -9,6 +9,9 @@ import registrationRoutes from "./registrationRoutes.js";
 import savedItemRoutes from "./savedItemRoutes.js";
 import financeRoutes from "./financeRoutes.js";
 
+import analyticsRoutes from "./analyticsRoutes.js";
+import systemRoutes from "./systemRoutes.js";
+
 const router = Router();
 
 router.get("/", (req, res) => {
@@ -24,6 +27,8 @@ router.use("/posts", postRoutes);
 router.use("/registrations", registrationRoutes);
 router.use("/saved-items", savedItemRoutes);
 router.use("/finance", financeRoutes);
+router.use("/analytics", analyticsRoutes);
+router.use("/system", systemRoutes);
 
 export default router;
 

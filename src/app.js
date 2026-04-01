@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 
 import routes from "./routes/index.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
+import { blackoutMiddleware } from "./middlewares/blackoutMiddleware.js";
 
 
 
@@ -39,6 +40,7 @@ app.use(
     })
 );
 
+app.use(blackoutMiddleware);
 app.use("/api", routes);
 app.use(errorHandler);
 
