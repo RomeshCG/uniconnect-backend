@@ -96,12 +96,17 @@ export const getClubs = async (req, res, next) => {
             });
         }
         const clubs = await Club.find().populate("admin", "name email profileImage");
-        
+
         const clubsWithStats = await Promise.all(clubs.map(async (club) => {
-            const memberCount = await ClubMember.countDocuments({ club: club._id });
+            const [memberCount, membership] = await Promise.all([
+                ClubMember.countDocuments({ club: club._id }),
+                req.user ? ClubMember.findOne({ club: club._id, user: req.user._id }) : null
+            ]);
+            
             return {
                 ...club._doc,
-                memberCount
+                memberCount,
+                isMember: !!membership
             };
         }));
 
