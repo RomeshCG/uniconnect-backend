@@ -39,6 +39,33 @@ export const protect = async (req, res, next) => {
     }
 };
 
+// @desc    Optional Protect - Verify JWT if it exists, but don't block request if it doesn't
+export const optionalProtect = async (req, res, next) => {
+    try {
+        let token;
+        if (req.cookies?.sessionToken) {
+            token = req.cookies.sessionToken;
+        } else if (req.headers.authorization?.startsWith("Bearer")) {
+            token = req.headers.authorization.split(" ")[1];
+        }
+
+        if (token) {
+            try {
+                const decoded = verifyToken(token);
+                const currentUser = await User.findById(decoded.id);
+                if (currentUser) {
+                    req.user = currentUser;
+                }
+            } catch (err) {
+                // If token is invalid, we don't set req.user but still allow access
+            }
+        }
+        next();
+    } catch (error) {
+        next(error);
+    }
+};
+
 // @desc    Restrict access to certain roles
 export const restrictTo = (...roles) => {
     return (req, res, next) => {

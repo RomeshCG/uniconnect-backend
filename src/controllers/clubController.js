@@ -75,6 +75,12 @@ export const getClubs = async (req, res, next) => {
             const club = await Club.findById(clubId).populate("admin", "name email profileImage");
             if (!club) return res.status(404).json({ message: "Club not found" });
 
+            // Fetch real statistics
+            const [memberCount, eventCount] = await Promise.all([
+                ClubMember.countDocuments({ club: clubId }),
+                Event.countDocuments({ club: clubId, status: "Published" })
+            ]);
+
             // Check if requesting user is a member
             let isMember = false;
             if (req.user) {
@@ -84,11 +90,22 @@ export const getClubs = async (req, res, next) => {
 
             return res.status(200).json({
                 ...club._doc,
-                isMember
+                isMember,
+                memberCount,
+                eventCount
             });
         }
         const clubs = await Club.find().populate("admin", "name email profileImage");
-        res.status(200).json(clubs);
+        
+        const clubsWithStats = await Promise.all(clubs.map(async (club) => {
+            const memberCount = await ClubMember.countDocuments({ club: club._id });
+            return {
+                ...club._doc,
+                memberCount
+            };
+        }));
+
+        res.status(200).json(clubsWithStats);
     } catch (error) {
         next(error);
     }
@@ -101,7 +118,7 @@ export const getMyClubs = async (req, res, next) => {
     try {
         // Find clubs where user is owner
         const ownedClubs = await Club.find({ admin: req.user._id });
-        
+
         // Find clubs where user is a manager (event_host or club_admin) via ClubMember
         const managementMemberships = await ClubMember.find({
             user: req.user._id,
@@ -221,8 +238,8 @@ export const updateMemberRole = async (req, res, next) => {
                 await user.save();
             } else if (role === "club_member" && user.role === "event_host") {
                 // If downgrading to member, check if they are host of any other club
-                const otherHostRole = await ClubMember.findOne({ 
-                    user: userId, 
+                const otherHostRole = await ClubMember.findOne({
+                    user: userId,
                     role: "event_host",
                     club: { $ne: clubId }
                 });
@@ -295,9 +312,9 @@ export const toggleMemberBan = async (req, res, next) => {
         member.isBanned = !member.isBanned;
         await member.save();
 
-        res.status(200).json({ 
-            message: `Member ${member.isBanned ? "banned" : "unbanned"} successfully`, 
-            isBanned: member.isBanned 
+        res.status(200).json({
+            message: `Member ${member.isBanned ? "banned" : "unbanned"} successfully`,
+            isBanned: member.isBanned
         });
     } catch (error) {
         next(error);

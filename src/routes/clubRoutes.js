@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect, restrictTo } from "../middlewares/authMiddleware.js";
+import { protect, restrictTo, optionalProtect } from "../middlewares/authMiddleware.js";
 import {
     createClub,
     getClubs,
@@ -17,12 +17,12 @@ import {
 const router = Router();
 
 // Retrieve all clubs
-router.get("/", protect, getClubs);
+router.get("/", optionalProtect, getClubs);
 
 // Club Admin only route for their own managed clubs
 router.get("/mine", protect, restrictTo("club_admin", "event_host", "admin", "superAdmin"), getMyClubs);
 
-router.get("/:clubId", protect, getClubs); // Use the same controller or create a new one
+router.get("/:clubId", optionalProtect, getClubs); // Public access with optional auth
 
 // Get members of a club
 router.get("/:clubId/members", protect, getClubMembers);
