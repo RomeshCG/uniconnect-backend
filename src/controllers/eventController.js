@@ -73,6 +73,53 @@ export const getEvents = async (req, res, next) => {
     }
 };
 
+// @desc    Get related upcoming events
+// @route   GET /api/events/:id/recommendations
+// @access  Private
+export const getRelatedEvents = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { limit = 3 } = req.query;
+        const maxItems = Math.min(Number(limit) || 3, 12);
+        const now = new Date();
+
+        const event = await Event.findById(id).select("_id club");
+        if (!event) {
+            return res.status(404).json({ message: "Event not found" });
+        }
+
+        const baseQuery = {
+            _id: { $ne: event._id },
+            status: "Published",
+            dateTime: { $gte: now },
+        };
+
+        // Prioritize events from the same club first for relevance.
+        const sameClubEvents = await Event.find({ ...baseQuery, club: event.club })
+            .populate("club", "name")
+            .sort({ dateTime: 1 })
+            .limit(maxItems);
+
+        const remaining = maxItems - sameClubEvents.length;
+        if (remaining <= 0) {
+            return res.status(200).json(sameClubEvents);
+        }
+
+        const sameClubIds = sameClubEvents.map((item) => item._id);
+        const otherEvents = await Event.find({
+            ...baseQuery,
+            _id: { $nin: [event._id, ...sameClubIds] },
+        })
+            .populate("club", "name")
+            .sort({ dateTime: 1 })
+            .limit(remaining);
+
+        return res.status(200).json([...sameClubEvents, ...otherEvents]);
+    } catch (error) {
+        next(error);
+    }
+};
+
 // @desc    Get current user's club events
 // @route   GET /api/events/mine
 // @access  Private/ClubAdmin

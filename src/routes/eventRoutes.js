@@ -7,7 +7,8 @@ import {
     updateEvent,
     deleteEvent,
     getEvent,
-    getManageableEvents
+    getManageableEvents,
+    getRelatedEvents
 } from "../controllers/eventController.js";
 import { validateRequest, eventSchema } from "../utils/validators.js";
 
@@ -19,6 +20,7 @@ router.get("/manageable", protect, getManageableEvents);
 
 // Publicly accessible to logged in users (mostly students browsing)
 router.get("/", protect, getEvents);
+router.get("/:id/recommendations", protect, getRelatedEvents);
 router.get("/:id", protect, getEvent);
 
 router.post(
