@@ -2,7 +2,10 @@ import Club from "../models/club.js";
 import User from "../models/user.js";
 import ClubMember from "../models/clubMember.js";
 import Event from "../models/event.js";
-import Post from "../models/post.js";
+import Post from "../models/Post.js";
+import Comment from "../models/Comment.js";
+import SavedItem from "../models/SavedItem.js";
+import { removeCloudinaryRawAsset } from "../utils/cloudinary.js";
 
 // @desc    Create a new club
 // @route   POST /api/clubs
@@ -473,7 +476,17 @@ export const deleteClub = async (req, res, next) => {
         // Delete all events associated with this club
         await Event.deleteMany({ club: clubId });
 
-        // Delete all posts associated with this club
+        const clubPosts = await Post.find({ club: clubId }).select("category media cloudinaryPublicId _id").lean();
+        const postIds = clubPosts.map((p) => p._id);
+        for (const p of clubPosts) {
+            if (p.category === "Resource") {
+                await removeCloudinaryRawAsset(p.media, p.cloudinaryPublicId);
+            }
+        }
+        if (postIds.length > 0) {
+            await Comment.deleteMany({ post: { $in: postIds } });
+            await SavedItem.deleteMany({ itemId: { $in: postIds } });
+        }
         await Post.deleteMany({ club: clubId });
 
         res.status(200).json({ message: "Club deleted successfully" });

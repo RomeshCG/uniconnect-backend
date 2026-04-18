@@ -37,6 +37,7 @@ app.use(
     cors({
         origin: process.env.CLIENT_URL ? process.env.CLIENT_URL.split(",") : ["http://localhost:5173"],
         credentials: true,
+        exposedHeaders: ["Content-Disposition", "X-Resource-Download-Count"],
     })
 );
 
