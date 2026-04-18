@@ -11,7 +11,9 @@ import {
     updateClubSettings,
     deleteClub,
     toggleClubBan,
-    toggleMemberBan
+    toggleMemberBan,
+    getClubNews,
+    updateMemberBoard,
 } from "../controllers/clubController.js";
 
 const router = Router();
@@ -21,6 +23,9 @@ router.get("/", optionalProtect, getClubs);
 
 // Club Admin only route for their own managed clubs
 router.get("/mine", protect, restrictTo("club_admin", "event_host", "admin", "superAdmin"), getMyClubs);
+
+// Must be registered before `/:clubId` so `news` is not captured as clubId
+router.get("/:clubId/news", optionalProtect, getClubNews);
 
 router.get("/:clubId", optionalProtect, getClubs); // Public access with optional auth
 
@@ -40,6 +45,7 @@ router.patch("/:clubId/ban", protect, restrictTo("admin", "superAdmin"), toggleC
 // Member management
 router.post("/:clubId/members", protect, restrictTo("club_admin", "admin", "superAdmin"), addMember);
 router.patch("/:clubId/members/:userId/role", protect, restrictTo("club_admin", "admin", "superAdmin"), updateMemberRole);
+router.patch("/:clubId/members/:userId/board", protect, restrictTo("club_admin", "admin", "superAdmin"), updateMemberBoard);
 router.patch("/:clubId/members/:userId/ban", protect, restrictTo("club_admin", "admin", "superAdmin"), toggleMemberBan);
 router.delete("/:clubId/members/:userId", protect, restrictTo("club_admin", "admin", "superAdmin"), removeMember);
 

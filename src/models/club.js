@@ -13,6 +13,16 @@ const clubSchema = new mongoose.Schema(
             trim: true,
             default: "",
         },
+        mission: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        vision: {
+            type: String,
+            trim: true,
+            default: "",
+        },
         category: {
             type: String,
             trim: true,

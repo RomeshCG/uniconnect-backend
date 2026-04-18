@@ -14,8 +14,22 @@ const clubMemberSchema = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ["club_member", "event_host"],
+            enum: ["club_member", "event_host", "club_admin"],
             default: "club_member",
+        },
+        /** Display title on club leadership (separate from permission role). */
+        boardTitle: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        boardOrder: {
+            type: Number,
+            default: 0,
+        },
+        showOnLeadershipBoard: {
+            type: Boolean,
+            default: false,
         },
         joinedAt: {
             type: Date,

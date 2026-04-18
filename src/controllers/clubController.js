@@ -9,7 +9,7 @@ import Post from "../models/post.js";
 // @access  Private/Admin/SuperAdmin
 export const createClub = async (req, res, next) => {
     try {
-        const { name, description, adminEmail, category, logo, banner } = req.body;
+        const { name, description, mission, vision, adminEmail, category, logo, banner } = req.body;
 
         if (!name || !adminEmail) {
             return res.status(400).json({ message: "Club name and admin email are required" });
@@ -31,6 +31,8 @@ export const createClub = async (req, res, next) => {
         const club = await Club.create({
             name,
             description,
+            mission: typeof mission === "string" ? mission.trim() : "",
+            vision: typeof vision === "string" ? vision.trim() : "",
             category,
             logo,
             banner,
@@ -43,11 +45,14 @@ export const createClub = async (req, res, next) => {
             await user.save();
         }
 
-        // Add the admin as a member as well (optional but good practice)
+        // Add the admin as a member; boardTitle is for leadership display (separate from permission role).
         await ClubMember.create({
             club: club._id,
             user: user._id,
-            role: "club_member" // The 'admin' field in Club model identifies the owner
+            role: "club_member",
+            boardTitle: "Club President",
+            boardOrder: 0,
+            showOnLeadershipBoard: true,
         });
 
         res.status(201).json({
@@ -76,9 +81,20 @@ export const getClubs = async (req, res, next) => {
             if (!club) return res.status(404).json({ message: "Club not found" });
 
             // Fetch real statistics
-            const [memberCount, eventCount] = await Promise.all([
+            const [memberCount, eventCount, leadershipBoard] = await Promise.all([
                 ClubMember.countDocuments({ club: clubId }),
-                Event.countDocuments({ club: clubId, status: "Published" })
+                Event.countDocuments({ club: clubId, status: "Published" }),
+                ClubMember.find({
+                    club: clubId,
+                    isBanned: { $ne: true },
+                    $or: [
+                        { showOnLeadershipBoard: true },
+                        { boardTitle: { $regex: /\S/ } },
+                    ],
+                })
+                    .populate("user", "name email department studentId profileImage")
+                    .sort({ boardOrder: 1, createdAt: 1 })
+                    .lean(),
             ]);
 
             // Check if requesting user is a member
@@ -89,10 +105,11 @@ export const getClubs = async (req, res, next) => {
             }
 
             return res.status(200).json({
-                ...club._doc,
+                ...club.toObject(),
                 isMember,
                 memberCount,
-                eventCount
+                eventCount,
+                leadershipBoard,
             });
         }
         const clubs = await Club.find().populate("admin", "name email profileImage");
@@ -161,7 +178,7 @@ export const getClubMembers = async (req, res, next) => {
 export const addMember = async (req, res, next) => {
     try {
         const { clubId } = req.params;
-        const { studentEmail, role } = req.body;
+        const { studentEmail, role, boardTitle, boardOrder, showOnLeadershipBoard } = req.body;
 
         if (!studentEmail) {
             return res.status(400).json({ message: "Student email is required" });
@@ -194,7 +211,10 @@ export const addMember = async (req, res, next) => {
         const newMember = await ClubMember.create({
             club: clubId,
             user: student._id,
-            role: role || "club_member",
+            role: role && ["club_member", "event_host", "club_admin"].includes(role) ? role : "club_member",
+            boardTitle: typeof boardTitle === "string" ? boardTitle.trim() : "",
+            boardOrder: boardOrder !== undefined && boardOrder !== null ? Number(boardOrder) : 0,
+            showOnLeadershipBoard: !!showOnLeadershipBoard,
         });
 
         res.status(200).json({
@@ -258,6 +278,74 @@ export const updateMemberRole = async (req, res, next) => {
         res.status(200).json({ message: "Role updated successfully", member });
     } catch (error) {
         console.error("Error in updateMemberRole:", error);
+        next(error);
+    }
+};
+
+// @desc    Update leadership board fields (boardTitle is separate from permission role)
+// @route   PATCH /api/clubs/:clubId/members/:userId/board
+// @access  Private/ClubAdmin (or higher)
+export const updateMemberBoard = async (req, res, next) => {
+    try {
+        const { clubId, userId } = req.params;
+        const { boardTitle, boardOrder, showOnLeadershipBoard } = req.body;
+
+        const club = await Club.findById(clubId);
+        if (!club) return res.status(404).json({ message: "Club not found" });
+
+        if (club.admin.toString() !== req.user._id.toString() && req.user.role !== "admin" && req.user.role !== "superAdmin") {
+            return res.status(403).json({ message: "Not authorized" });
+        }
+
+        const updates = {};
+        if (boardTitle !== undefined) {
+            updates.boardTitle = typeof boardTitle === "string" ? boardTitle.trim() : "";
+        }
+        if (boardOrder !== undefined && boardOrder !== null) {
+            const n = Number(boardOrder);
+            updates.boardOrder = Number.isFinite(n) ? n : 0;
+        }
+        if (showOnLeadershipBoard !== undefined) {
+            updates.showOnLeadershipBoard = !!showOnLeadershipBoard;
+        }
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ message: "No board fields to update" });
+        }
+
+        const member = await ClubMember.findOneAndUpdate(
+            { club: clubId, user: userId },
+            { $set: updates },
+            { new: true }
+        ).populate("user", "name email profileImage studentId department");
+
+        if (!member) return res.status(404).json({ message: "Member record not found" });
+
+        res.status(200).json({ message: "Leadership board updated", member });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Club-scoped posts (news feed)
+// @route   GET /api/clubs/:clubId/news
+// @access  Public (optional auth)
+export const getClubNews = async (req, res, next) => {
+    try {
+        const { clubId } = req.params;
+        const limit = Math.min(Math.max(parseInt(String(req.query.limit), 10) || 12, 1), 40);
+
+        const club = await Club.findById(clubId).select("_id");
+        if (!club) return res.status(404).json({ message: "Club not found" });
+
+        const posts = await Post.find({ club: clubId })
+            .populate("author", "name profileImage studentId")
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .lean();
+
+        res.status(200).json(posts);
+    } catch (error) {
         next(error);
     }
 };
@@ -332,7 +420,7 @@ export const toggleMemberBan = async (req, res, next) => {
 export const updateClubSettings = async (req, res, next) => {
     try {
         const { clubId } = req.params;
-        const { name, description, category, logo, banner, gallery, socialLinks } = req.body;
+        const { name, description, mission, vision, category, logo, banner, gallery, socialLinks } = req.body;
 
         const club = await Club.findById(clubId);
         if (!club) return res.status(404).json({ message: "Club not found" });
@@ -350,6 +438,8 @@ export const updateClubSettings = async (req, res, next) => {
         }
 
         if (description !== undefined) club.description = description;
+        if (mission !== undefined) club.mission = typeof mission === "string" ? mission.trim() : "";
+        if (vision !== undefined) club.vision = typeof vision === "string" ? vision.trim() : "";
         if (category !== undefined) club.category = category;
         if (logo !== undefined) club.logo = logo;
         if (banner !== undefined) club.banner = banner;

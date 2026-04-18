@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Event from "../models/event.js";
 import Club from "../models/club.js";
 import ClubMember from "../models/clubMember.js";
@@ -57,14 +58,21 @@ export const createEvent = async (req, res, next) => {
 export const getEvents = async (req, res, next) => {
     try {
         let query = {};
+        const { clubId } = req.query;
 
-        // Students and guest roles only see published events
-        if (req.user.role === "student") {
+        if (clubId) {
+            if (!mongoose.Types.ObjectId.isValid(clubId)) {
+                return res.status(400).json({ message: "Invalid club id" });
+            }
+            query.club = clubId;
+            // Public club profile: only published events for this club
+            query.status = "Published";
+        } else if (req.user.role === "student") {
             query.status = "Published";
         }
 
         const events = await Event.find(query)
-            .populate("club", "name")
+            .populate("club", "name logo")
             .sort({ dateTime: 1 });
 
         res.status(200).json(events);
