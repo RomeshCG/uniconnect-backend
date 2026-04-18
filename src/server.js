@@ -12,6 +12,7 @@ import dotenv from "dotenv";
 import app from "./app.js";
 import connectDB from "./config/db.js";
 import { initSocket } from "./config/socket.js";
+import { startReminderScheduler } from "./services/reminderScheduler.js";
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ const PORT = process.env.PORT || 5000;
 initSocket(server);
 
 await connectDB();
+startReminderScheduler();
 
 server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);

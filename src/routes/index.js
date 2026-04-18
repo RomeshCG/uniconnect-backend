@@ -13,6 +13,7 @@ import analyticsRoutes from "./analyticsRoutes.js";
 import systemRoutes from "./systemRoutes.js";
 import userRoutes from "./userRoutes.js";
 import clubApplicationRoutes from "./clubApplicationRoutes.js";
+import communicationsRoutes from "./communicationsRoutes.js";
 
 const router = Router();
 
@@ -33,6 +34,7 @@ router.use("/analytics", analyticsRoutes);
 router.use("/system", systemRoutes);
 router.use("/users", userRoutes);
 router.use("/club-applications", clubApplicationRoutes);
+router.use("/communications", communicationsRoutes);
 
 export default router;
 
