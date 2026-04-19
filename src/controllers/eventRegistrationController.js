@@ -103,8 +103,13 @@ export const registerForEvent = async (req, res, next) => {
             // We don't return error to user because registration actually succeeded
         }
 
+        const successMessage =
+            updatedEvent.ticketType === "Paid"
+                ? "You are registered. Entrance fee is paid at the door—bring the amount shown on the event page."
+                : "Successfully registered for the event";
+
         res.status(201).json({
-            message: "Successfully registered for the event",
+            message: successMessage,
             registration: {
                 ...registration.toObject(),
                 event: updatedEvent // Include updated event info

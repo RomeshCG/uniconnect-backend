@@ -10,7 +10,7 @@ import {
     getManageableEvents,
     getRelatedEvents
 } from "../controllers/eventController.js";
-import { validateRequest, eventSchema } from "../utils/validators.js";
+import { validateRequest, eventSchema, eventUpdateSchema } from "../utils/validators.js";
 
 const router = Router();
 
@@ -35,7 +35,7 @@ router.put(
     "/:id",
     protect,
     restrictTo("club_admin", "event_host", "admin", "superAdmin"),
-    validateRequest(eventSchema.partial()),
+    validateRequest(eventUpdateSchema),
     updateEvent
 );
 

@@ -6,9 +6,10 @@ export const validateRequest = (schema) => (req, res, next) => {
         next();
     } catch (error) {
         if (error instanceof z.ZodError) {
+            const issues = error.issues ?? error.errors ?? [];
             return res.status(400).json({
                 message: "Validation failed",
-                errors: error.errors.map((err) => ({
+                errors: issues.map((err) => ({
                     path: err.path.join("."),
                     message: err.message,
                 })),
@@ -83,7 +84,7 @@ export const postUpdateSchema = z.object({
     cloudinaryPublicId: z.string().max(512).optional(),
 });
 
-export const eventSchema = z.object({
+const eventBaseSchema = z.object({
     title: z.string().min(3, "Title must be at least 3 characters").max(100),
     description: z.string().min(10, "Description must be at least 10 characters"),
     banner: z.string().optional(),
@@ -97,4 +98,22 @@ export const eventSchema = z.object({
     capacity: z.coerce.number().int().positive("Capacity must be a positive integer"),
     ticketType: z.enum(["Free for Students", "Paid", "Member Only", "Open to All"]),
     status: z.enum(["Draft", "Published", "Sold Out", "Cancelled"]).optional(),
+    ticketPrice: z.coerce.number().min(0).optional(),
+    paymentInstructions: z.string().max(2000).optional().default(""),
 });
+
+export const eventSchema = eventBaseSchema.superRefine((data, ctx) => {
+    if (data.ticketType === "Paid") {
+        const price = data.ticketPrice;
+        if (price == null || Number(price) <= 0) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Paid events require a ticket price greater than 0 (pay at the door)",
+                path: ["ticketPrice"],
+            });
+        }
+    }
+});
+
+/** PUT /events/:id — partial body; paid + price rules enforced in controller with existing event */
+export const eventUpdateSchema = eventBaseSchema.partial();

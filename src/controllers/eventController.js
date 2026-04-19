@@ -8,7 +8,19 @@ import ClubMember from "../models/clubMember.js";
 // @access  Private/ClubAdmin (or higher)
 export const createEvent = async (req, res, next) => {
     try {
-        const { title, description, banner, dateTime, venue, capacity, ticketType, status, location } = req.body;
+        const {
+            title,
+            description,
+            banner,
+            dateTime,
+            venue,
+            capacity,
+            ticketType,
+            status,
+            location,
+            ticketPrice,
+            paymentInstructions,
+        } = req.body;
 
         // Find the club management status
         let club = await Club.findOne({ admin: req.user._id });
@@ -32,6 +44,7 @@ export const createEvent = async (req, res, next) => {
             return res.status(400).json({ message: "Admins must specify a clubId" });
         }
 
+        const isPaid = ticketType === "Paid";
         const event = await Event.create({
             title,
             description,
@@ -40,6 +53,8 @@ export const createEvent = async (req, res, next) => {
             venue,
             capacity,
             ticketType,
+            ticketPrice: isPaid ? Number(ticketPrice) : 0,
+            paymentInstructions: isPaid ? (paymentInstructions || "").trim() : "",
             location: location || { lat: 6.9271, lng: 79.8612 },
             status: status || "Draft",
             club: club._id,
@@ -227,7 +242,24 @@ export const updateEvent = async (req, res, next) => {
             return res.status(403).json({ message: "Not authorized to update this event" });
         }
 
-        const updatedEvent = await Event.findByIdAndUpdate(id, req.body, {
+        const nextType = req.body.ticketType ?? event.ticketType;
+        const nextPrice =
+            req.body.ticketPrice !== undefined ? Number(req.body.ticketPrice) : event.ticketPrice;
+        if (nextType === "Paid" && (!nextPrice || nextPrice <= 0)) {
+            return res.status(400).json({
+                message: "Paid events require a ticket price greater than 0 (pay at the door)",
+            });
+        }
+
+        const payload = { ...req.body };
+        if (nextType !== "Paid") {
+            payload.ticketPrice = 0;
+            payload.paymentInstructions = "";
+        } else if (payload.paymentInstructions !== undefined) {
+            payload.paymentInstructions = String(payload.paymentInstructions).trim();
+        }
+
+        const updatedEvent = await Event.findByIdAndUpdate(id, payload, {
             new: true,
             runValidators: true
         });
