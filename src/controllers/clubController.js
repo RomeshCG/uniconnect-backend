@@ -12,7 +12,7 @@ import { removeCloudinaryRawAsset } from "../utils/cloudinary.js";
 // @access  Private/Admin/SuperAdmin
 export const createClub = async (req, res, next) => {
     try {
-        const { name, description, mission, vision, adminEmail, category, logo, banner } = req.body;
+        const { name, description, mission, vision, adminEmail, category, logo, banner, contactInfo } = req.body;
 
         if (!name || !adminEmail) {
             return res.status(400).json({ message: "Club name and admin email are required" });
@@ -39,6 +39,10 @@ export const createClub = async (req, res, next) => {
             category,
             logo,
             banner,
+            contactInfo: {
+                email: typeof contactInfo?.email === "string" ? contactInfo.email.trim() : "",
+                phone: typeof contactInfo?.phone === "string" ? contactInfo.phone.trim() : "",
+            },
             admin: user._id,
         });
 
@@ -423,7 +427,7 @@ export const toggleMemberBan = async (req, res, next) => {
 export const updateClubSettings = async (req, res, next) => {
     try {
         const { clubId } = req.params;
-        const { name, description, mission, vision, category, logo, banner, gallery, socialLinks } = req.body;
+        const { name, description, mission, vision, category, logo, banner, gallery, socialLinks, contactInfo } = req.body;
 
         const club = await Club.findById(clubId);
         if (!club) return res.status(404).json({ message: "Club not found" });
@@ -448,6 +452,12 @@ export const updateClubSettings = async (req, res, next) => {
         if (banner !== undefined) club.banner = banner;
         if (gallery !== undefined) club.gallery = gallery;
         if (socialLinks !== undefined) club.socialLinks = socialLinks;
+        if (contactInfo !== undefined) {
+            club.contactInfo = {
+                email: typeof contactInfo?.email === "string" ? contactInfo.email.trim() : "",
+                phone: typeof contactInfo?.phone === "string" ? contactInfo.phone.trim() : "",
+            };
+        }
 
         await club.save();
 

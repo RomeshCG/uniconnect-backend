@@ -53,6 +53,10 @@ const clubSchema = new mongoose.Schema(
             facebook: { type: String, default: "" },
             website: { type: String, default: "" },
         },
+        contactInfo: {
+            email: { type: String, trim: true, default: "" },
+            phone: { type: String, trim: true, default: "" },
+        },
         isBanned: {
             type: Boolean,
             default: false,

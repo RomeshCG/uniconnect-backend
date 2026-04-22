@@ -1,11 +1,69 @@
 import nodemailer from "nodemailer";
 import EmailTemplate from "../models/EmailTemplate.js";
 import ReminderPolicy from "../models/ReminderPolicy.js";
+import User from "../models/user.js";
 import { DEFAULT_EMAIL_TEMPLATES, EMAIL_TEMPLATE_KEYS } from "../constants/emailTemplates.js";
 import { getResolvedEmailTemplateByKey, renderEmailTemplate } from "../utils/emailTemplateService.js";
 import { processReminderQueue } from "../services/reminderScheduler.js";
 
 const ALLOWED_KEYS = Object.values(EMAIL_TEMPLATE_KEYS);
+
+export const submitHelpRequest = async (req, res, next) => {
+    try {
+        const subject = typeof req.body.subject === "string" ? req.body.subject.trim() : "";
+        const message = typeof req.body.message === "string" ? req.body.message.trim() : "";
+
+        if (!subject || !message) {
+            return res.status(400).json({ message: "Subject and message are required" });
+        }
+
+        const superAdmins = await User.find({ role: "superAdmin", isBanned: { $ne: true } })
+            .select("email name")
+            .lean();
+
+        if (superAdmins.length === 0) {
+            return res.status(404).json({ message: "No active system admin found to receive this request" });
+        }
+
+        const recipients = superAdmins.map((user) => user.email).filter(Boolean);
+        if (recipients.length === 0) {
+            return res.status(404).json({ message: "System admin contact email is not configured" });
+        }
+
+        const transporter = nodemailer.createTransport({
+            service: "gmail",
+            auth: {
+                user: process.env.GMAIL_USER,
+                pass: process.env.GMAIL_APP_PASSWORD,
+            },
+        });
+
+        const requesterName = req.user?.name || "Unknown user";
+        const requesterEmail = req.user?.email || "unknown@email";
+        const requesterRole = req.user?.role || "unknown";
+
+        const html = `
+            <h2>New Help Request</h2>
+            <p><strong>From:</strong> ${requesterName} (${requesterEmail})</p>
+            <p><strong>Role:</strong> ${requesterRole}</p>
+            <p><strong>Subject:</strong> ${subject}</p>
+            <hr />
+            <p style="white-space: pre-wrap;">${message}</p>
+        `;
+
+        await transporter.sendMail({
+            from: `"UniConnect Help Desk" <${process.env.GMAIL_USER}>`,
+            to: recipients.join(","),
+            replyTo: requesterEmail,
+            subject: `[Help Request] ${subject}`,
+            html,
+        });
+
+        res.status(200).json({ message: "Your help request was sent to the system admin team." });
+    } catch (error) {
+        next(error);
+    }
+};
 
 const normalizeTemplatePayload = (template, customTemplate) => ({
     key: template.key,

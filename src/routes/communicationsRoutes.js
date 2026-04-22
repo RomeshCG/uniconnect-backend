@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+    submitHelpRequest,
     getTemplates,
     getTemplateByKey,
     upsertTemplate,
@@ -11,6 +12,8 @@ import {
 import { protect, restrictTo } from "../middlewares/authMiddleware.js";
 
 const router = Router();
+
+router.post("/help-requests", protect, submitHelpRequest);
 
 router.use(protect, restrictTo("admin", "superAdmin"));
 
