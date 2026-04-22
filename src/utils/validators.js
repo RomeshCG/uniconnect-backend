@@ -6,9 +6,10 @@ export const validateRequest = (schema) => (req, res, next) => {
         next();
     } catch (error) {
         if (error instanceof z.ZodError) {
+            const issues = error.issues ?? error.errors ?? [];
             return res.status(400).json({
                 message: "Validation failed",
-                errors: error.errors.map((err) => ({
+                errors: issues.map((err) => ({
                     path: err.path.join("."),
                     message: err.message,
                 })),
@@ -18,18 +19,72 @@ export const validateRequest = (schema) => (req, res, next) => {
     }
 };
 
-export const postSchema = z.object({
-    title: z.string().max(150, "Title cannot exceed 150 characters").optional().default(""),
-    content: z
-        .string()
-        .min(1, "Content is required")
-        .max(2200, "Content cannot exceed 2200 characters"),
-    image: z.string().optional(),
-    category: z.enum(["Post", "Announcement", "Event Update", "Member Spotlight"]).optional(),
-    status: z.enum(["Draft", "Published"]).optional(),
+const postCategories = z.enum([
+    "Announcement",
+    "Post",
+    "Event Update",
+    "Member Spotlight",
+    "General",
+    "Event",
+    "Resource",
+]);
+
+const resourceTopicEnum = z.enum([
+    "Lecture Notes",
+    "Assignments",
+    "Tutorials",
+    "Past Papers",
+    "General",
+]);
+
+export const postSchema = z
+    .object({
+        content: z
+            .string()
+            .min(1, "Content is required")
+            .max(2200, "Content cannot exceed 2200 characters"),
+        media: z.string().max(2048).optional().default(""),
+        category: postCategories.optional().default("Post"),
+        title: z.string().max(200).optional().default(""),
+        resourceCategory: resourceTopicEnum.optional(),
+        fileName: z.string().max(255).optional().default(""),
+        mimeType: z.string().max(128).optional().default(""),
+        fileSizeBytes: z.coerce.number().int().min(0).optional(),
+        cloudinaryPublicId: z.string().max(512).optional().default(""),
+    })
+    .superRefine((data, ctx) => {
+        if (data.category === "Resource") {
+            if (!data.media?.trim()) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: "Upload a file first, then publish the resource with the returned URL in media.",
+                    path: ["media"],
+                });
+            }
+            if (!data.title?.trim()) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: "Title is required for resources.",
+                    path: ["title"],
+                });
+            }
+        }
+    });
+
+/** Updates — no refinements (Zod v4 disallows `.partial()` on refined schemas); rules enforced in controller */
+export const postUpdateSchema = z.object({
+    content: z.string().min(1).max(2200).optional(),
+    media: z.string().max(2048).optional(),
+    category: postCategories.optional(),
+    title: z.string().max(200).optional(),
+    resourceCategory: resourceTopicEnum.optional(),
+    fileName: z.string().max(255).optional(),
+    mimeType: z.string().max(128).optional(),
+    fileSizeBytes: z.coerce.number().int().min(0).optional(),
+    cloudinaryPublicId: z.string().max(512).optional(),
 });
 
-export const eventSchema = z.object({
+const eventBaseSchema = z.object({
     title: z.string().min(3, "Title must be at least 3 characters").max(100),
     description: z.string().min(10, "Description must be at least 10 characters"),
     banner: z.string().optional(),
@@ -43,4 +98,22 @@ export const eventSchema = z.object({
     capacity: z.coerce.number().int().positive("Capacity must be a positive integer"),
     ticketType: z.enum(["Free for Students", "Paid", "Member Only", "Open to All"]),
     status: z.enum(["Draft", "Published", "Sold Out", "Cancelled"]).optional(),
+    ticketPrice: z.coerce.number().min(0).optional(),
+    paymentInstructions: z.string().max(2000).optional().default(""),
 });
+
+export const eventSchema = eventBaseSchema.superRefine((data, ctx) => {
+    if (data.ticketType === "Paid") {
+        const price = data.ticketPrice;
+        if (price == null || Number(price) <= 0) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Paid events require a ticket price greater than 0 (pay at the door)",
+                path: ["ticketPrice"],
+            });
+        }
+    }
+});
+
+/** PUT /events/:id — partial body; paid + price rules enforced in controller with existing event */
+export const eventUpdateSchema = eventBaseSchema.partial();

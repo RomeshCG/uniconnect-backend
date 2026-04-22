@@ -67,6 +67,11 @@ const eventSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+        paymentInstructions: {
+            type: String,
+            trim: true,
+            default: "",
+        },
     },
     {
         timestamps: true,

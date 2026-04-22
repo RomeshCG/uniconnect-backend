@@ -13,6 +13,16 @@ const clubSchema = new mongoose.Schema(
             trim: true,
             default: "",
         },
+        mission: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        vision: {
+            type: String,
+            trim: true,
+            default: "",
+        },
         category: {
             type: String,
             trim: true,
@@ -42,6 +52,10 @@ const clubSchema = new mongoose.Schema(
             twitter: { type: String, default: "" },
             facebook: { type: String, default: "" },
             website: { type: String, default: "" },
+        },
+        contactInfo: {
+            email: { type: String, trim: true, default: "" },
+            phone: { type: String, trim: true, default: "" },
         },
         isBanned: {
             type: Boolean,

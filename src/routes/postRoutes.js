@@ -10,13 +10,17 @@ import {
     toggleLike,
     addComment,
     getComments,
+    recordResourceDownload,
+    streamResourceFile,
 } from "../controllers/postController.js";
-import { validateRequest, postSchema } from "../utils/validators.js";
+import { validateRequest, postSchema, postUpdateSchema } from "../utils/validators.js";
 
 const router = Router();
 
 // Feed & Interactions (all logged in users)
 router.get("/published", protect, getPublishedPosts);
+router.post("/:id/download", protect, recordResourceDownload);
+router.get("/:id/file", protect, streamResourceFile);
 router.get("/:id", protect, getPost);
 router.post("/:id/like", protect, toggleLike);
 router.post("/:id/comment", protect, addComment);
@@ -42,7 +46,7 @@ router.put(
     "/:id",
     protect,
     restrictTo("club_admin", "admin", "superAdmin"),
-    validateRequest(postSchema.partial()),
+    validateRequest(postUpdateSchema),
     updatePost
 );
 

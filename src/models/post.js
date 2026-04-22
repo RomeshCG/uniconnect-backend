@@ -21,6 +21,25 @@ const postSchema = new mongoose.Schema(
             type: String,
             default: "",
         },
+        /** Display title — required for library UX when category is "Resource" */
+        title: {
+            type: String,
+            default: "",
+            trim: true,
+            maxlength: 200,
+        },
+        /** Academic bucket for resource posts (university materials) */
+        resourceCategory: {
+            type: String,
+            enum: ["Lecture Notes", "Assignments", "Tutorials", "Past Papers", "General"],
+            default: "General",
+        },
+        fileName: { type: String, default: "", trim: true },
+        mimeType: { type: String, default: "", trim: true },
+        fileSizeBytes: { type: Number, default: 0, min: 0 },
+        downloadCount: { type: Number, default: 0, min: 0 },
+        /** Cloudinary public_id for raw file — used to delete asset when post is removed */
+        cloudinaryPublicId: { type: String, default: "", trim: true, maxlength: 512 },
         likes: [
             {
                 type: mongoose.Schema.Types.ObjectId,

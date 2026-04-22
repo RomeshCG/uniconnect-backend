@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Event from "../models/event.js";
 import Club from "../models/club.js";
 import ClubMember from "../models/clubMember.js";
@@ -7,7 +8,19 @@ import ClubMember from "../models/clubMember.js";
 // @access  Private/ClubAdmin (or higher)
 export const createEvent = async (req, res, next) => {
     try {
-        const { title, description, banner, dateTime, venue, capacity, ticketType, status, location } = req.body;
+        const {
+            title,
+            description,
+            banner,
+            dateTime,
+            venue,
+            capacity,
+            ticketType,
+            status,
+            location,
+            ticketPrice,
+            paymentInstructions,
+        } = req.body;
 
         // Find the club management status
         let club = await Club.findOne({ admin: req.user._id });
@@ -31,6 +44,7 @@ export const createEvent = async (req, res, next) => {
             return res.status(400).json({ message: "Admins must specify a clubId" });
         }
 
+        const isPaid = ticketType === "Paid";
         const event = await Event.create({
             title,
             description,
@@ -39,6 +53,8 @@ export const createEvent = async (req, res, next) => {
             venue,
             capacity,
             ticketType,
+            ticketPrice: isPaid ? Number(ticketPrice) : 0,
+            paymentInstructions: isPaid ? (paymentInstructions || "").trim() : "",
             location: location || { lat: 6.9271, lng: 79.8612 },
             status: status || "Draft",
             club: club._id,
@@ -57,17 +73,71 @@ export const createEvent = async (req, res, next) => {
 export const getEvents = async (req, res, next) => {
     try {
         let query = {};
+        const { clubId } = req.query;
 
-        // Students and guest roles only see published events
-        if (req.user.role === "student") {
+        if (clubId) {
+            if (!mongoose.Types.ObjectId.isValid(clubId)) {
+                return res.status(400).json({ message: "Invalid club id" });
+            }
+            query.club = clubId;
+            // Public club profile: only published events for this club
+            query.status = "Published";
+        } else if (req.user.role === "student") {
             query.status = "Published";
         }
 
         const events = await Event.find(query)
-            .populate("club", "name")
+            .populate("club", "name logo")
             .sort({ dateTime: 1 });
 
         res.status(200).json(events);
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Get related upcoming events
+// @route   GET /api/events/:id/recommendations
+// @access  Private
+export const getRelatedEvents = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { limit = 3 } = req.query;
+        const maxItems = Math.min(Number(limit) || 3, 12);
+        const now = new Date();
+
+        const event = await Event.findById(id).select("_id club");
+        if (!event) {
+            return res.status(404).json({ message: "Event not found" });
+        }
+
+        const baseQuery = {
+            _id: { $ne: event._id },
+            status: "Published",
+            dateTime: { $gte: now },
+        };
+
+        // Prioritize events from the same club first for relevance.
+        const sameClubEvents = await Event.find({ ...baseQuery, club: event.club })
+            .populate("club", "name")
+            .sort({ dateTime: 1 })
+            .limit(maxItems);
+
+        const remaining = maxItems - sameClubEvents.length;
+        if (remaining <= 0) {
+            return res.status(200).json(sameClubEvents);
+        }
+
+        const sameClubIds = sameClubEvents.map((item) => item._id);
+        const otherEvents = await Event.find({
+            ...baseQuery,
+            _id: { $nin: [event._id, ...sameClubIds] },
+        })
+            .populate("club", "name")
+            .sort({ dateTime: 1 })
+            .limit(remaining);
+
+        return res.status(200).json([...sameClubEvents, ...otherEvents]);
     } catch (error) {
         next(error);
     }
@@ -172,7 +242,24 @@ export const updateEvent = async (req, res, next) => {
             return res.status(403).json({ message: "Not authorized to update this event" });
         }
 
-        const updatedEvent = await Event.findByIdAndUpdate(id, req.body, {
+        const nextType = req.body.ticketType ?? event.ticketType;
+        const nextPrice =
+            req.body.ticketPrice !== undefined ? Number(req.body.ticketPrice) : event.ticketPrice;
+        if (nextType === "Paid" && (!nextPrice || nextPrice <= 0)) {
+            return res.status(400).json({
+                message: "Paid events require a ticket price greater than 0 (pay at the door)",
+            });
+        }
+
+        const payload = { ...req.body };
+        if (nextType !== "Paid") {
+            payload.ticketPrice = 0;
+            payload.paymentInstructions = "";
+        } else if (payload.paymentInstructions !== undefined) {
+            payload.paymentInstructions = String(payload.paymentInstructions).trim();
+        }
+
+        const updatedEvent = await Event.findByIdAndUpdate(id, payload, {
             new: true,
             runValidators: true
         });
